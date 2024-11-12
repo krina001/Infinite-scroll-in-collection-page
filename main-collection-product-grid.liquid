@@ -1,51 +1,109 @@
 <!-------------------- Add below js in main-collection-product-grid.liquid ----------------------------->
 
 <script>
- document.addEventListener('DOMContentLoaded', function() {
-  let currentPage = 1;
-  let isLoading = false;
-  const productGrid = document.getElementById('product-grid');
-  const productContainer = document.getElementById('ProductGridContainer');
+document.addEventListener('DOMContentLoaded', function () {
+  const productGrid = document.getElementById('ProductGridContainer');
+  let loading = false;
+  let currentPage = 1; // Track the current page
+  let stopLoading = false; // Flag to indicate if loading should stop
 
-  // Function to load more products
-  function loadMoreProducts() {
-    if (isLoading) return;
-    isLoading = true;
-    currentPage++;
-
-    fetch(`${window.location.pathname}?page=${currentPage}`, {
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-    .then(response => response.text())
-    .then(data => {
-      const parser = new DOMParser();
-      const htmlDoc = parser.parseFromString(data, 'text/html');
-      const newProducts = htmlDoc.querySelectorAll('#product-grid li');
-
-      newProducts.forEach(function(product) {
-        productGrid.appendChild(product);
-      });
-
-      isLoading = false;
-    })
-    .catch(error => {
-      console.error('Error loading more products:', error);
-      isLoading = false;
-    });
+  function getCurrentPage() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    return pageParam ? parseInt(pageParam) : 1; // Default to 1 if no page param exists
   }
 
-  // Adjust the scroll trigger
-  window.addEventListener('scroll', function() {
-    // Check if the user is 300px from the bottom of the product grid (instead of the entire page)
-    const scrollPosition = window.innerHeight + window.pageYOffset;
-    const productGridHeight = productGrid.offsetHeight + productGrid.offsetTop;
+  function updateURLWithPage(newPage) {
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('page', newPage);
+    window.history.pushState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+  }
 
-    if (scrollPosition >= productGridHeight - 300 && !isLoading) {
+  function resetState() {
+    currentPage = 1;
+    stopLoading = false;
+    productGrid.innerHTML = ''; // Clear current product grid
+  }
+
+  function checkScroll() {
+    if (loading || stopLoading) return; // Prevent multiple triggers or further loading if stopped
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
       loadMoreProducts();
     }
+  }
+
+  function loadMoreProducts() {
+    if (loading || stopLoading) return;
+    loading = true;
+
+    currentPage = getCurrentPage(); // Get the current page
+    const nextPage = currentPage + 1; // Calculate the next page to load
+
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('page', nextPage);
+    const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+
+    fetch(newUrl)
+      .then(response => response.text())
+      .then(responseText => {
+        const parser = new DOMParser();
+        const parsedDoc = parser.parseFromString(responseText, 'text/html');
+        const newProducts = parsedDoc.getElementById('ProductGridContainer')?.innerHTML;
+
+        if (!newProducts || newProducts.trim().includes('No products found')) {
+          // No new products, stop loading
+          stopLoading = true;
+          return;
+        }
+
+        // Append new products to the existing product grid
+        productGrid.innerHTML += newProducts;
+        currentPage = nextPage; // Update the current page number
+        updateURLWithPage(currentPage); // Update the URL
+
+        loading = false; // Reset loading state
+      })
+      .catch(() => {
+        loading = false;
+      });
+  }
+
+  // Listen for scroll events
+  window.addEventListener('scroll', checkScroll);
+
+  // Detect filter changes and reset state
+  const filterButtons = document.querySelectorAll('.filter-button'); // Adjust selector as needed
+  filterButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      resetState();
+      loadMoreProducts(); // Load products immediately after clearing filters
+    });
   });
+
+  // Optional: Reset state when the page's URL changes (useful if filters change the URL)
+  window.addEventListener('popstate', () => {
+    resetState();
+    loadMoreProducts();
+  });
+  document.addEventListener('scroll', function () {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+        loadMoreProducts(); // Ensure this function fetches new products
+    }
 });
+
+});
+// window.onload = function() {
+//   const urlParams = new URLSearchParams(window.location.search);
+
+//   // Check if the 'page' query string exists
+//   if (urlParams.has('page')) {
+//     // Remove the 'page' parameter
+//     urlParams.delete('page');
+
+//     // Update the URL without the 'page' parameter, preserving other parameters
+//     const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+//     window.history.pushState({}, '', newUrl);
+//   }
+// };
 
 </script>
